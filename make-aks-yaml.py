@@ -9,17 +9,29 @@ def get_kubernetes_resources():
 
     # Inicializar clientes para obter informações do cluster
     v1 = client.CoreV1Api()
-    v1_networking = client.NetworkingV1Api()
+    apps_v1 = client.AppsV1Api()
+
+    # Obter informações sobre os nós
+    nodes = v1.list_node().items
+    node_count = len(nodes)
 
     # Obter namespaces
     namespaces = v1.list_namespace().items
-    network_policies = v1_networking.list_network_policy_for_all_namespaces().items
-    services = v1.list_service_for_all_namespaces().items
+
+    # Obter ReplicaSets e seus números de réplicas
+    replica_sets = apps_v1.list_replica_set_for_all_namespaces().items
+    replica_set_info = []
+    for rs in replica_sets:
+        replica_set_info.append({
+            "name": rs.metadata.name,
+            "namespace": rs.metadata.namespace,
+            "replicas": rs.status.replicas
+        })
 
     resources = {
+        "node_count": node_count,
         "namespaces": [ns.metadata.name for ns in namespaces],
-        "network_policies": [np.metadata.name for np in network_policies],
-        "services": [svc.metadata.name for svc in services]
+        "replica_sets": replica_set_info
     }
 
     return resources
@@ -41,7 +53,7 @@ def generate_terraform_yaml(resources):
                     "dns_prefix": "exampleaks",
                     "default_node_pool": {
                         "name": "default",
-                        "node_count": 1,
+                        "node_count": resources["node_count"],  # Usando o número de nós do cluster atual
                         "vm_size": "Standard_DS2_v2"
                     },
                     "network_profile": {
@@ -56,10 +68,12 @@ def generate_terraform_yaml(resources):
         }
     }
 
-    # Adicionar namespaces como tags ou informações extras se necessário
+    # Adicionar namespaces e informações de ReplicaSets ao YAML gerado
     terraform_yaml["resource"]["azurerm_kubernetes_cluster"]["example"]["tags"] = {
         "namespaces": resources["namespaces"]
     }
+
+    terraform_yaml["resource"]["azurerm_kubernetes_cluster"]["example"]["replica_sets"] = resources["replica_sets"]
 
     return terraform_yaml
 
