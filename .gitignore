@@ -1,3 +1,5 @@
+# Ignore terraform yaml generetad
+terraform_config.yaml
 # Local .terraform directories
 **/.terraform/*
 
